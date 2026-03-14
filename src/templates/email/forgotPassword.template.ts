@@ -1,4 +1,4 @@
-const forgotPasswordTemplate = (link: string) => `<!DOCTYPE html>
+const forgotPasswordTemplate = (link: string, expiry: number) => `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8" />
@@ -33,7 +33,7 @@ const forgotPasswordTemplate = (link: string) => `<!DOCTYPE html>
                 </a>
               </p>
 
-              <p>This link will expire in <strong>5 minutes</strong></p>
+              <p>This link will expire in <strong>${expiry / 60} minutes</strong></p>
 
               <p> If you did not request a password reset, please ignore this email.</p>
 

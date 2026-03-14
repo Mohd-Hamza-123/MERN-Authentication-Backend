@@ -1,10 +1,12 @@
-import type { NextFunction, Request , Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 
 const authMiddleware = async (req: Request, res: Response, next: NextFunction) => {
 
-    const userId = req.session.userId
+    const sessionUserId = req.session?.userId
+    console.log(req.user);
+    console.log("user", req.session);
 
-    if (!userId) {
+    if (!sessionUserId && !req?.user) {
         return res.status(401).json({
             success: false,
             message: "Not authenticated"

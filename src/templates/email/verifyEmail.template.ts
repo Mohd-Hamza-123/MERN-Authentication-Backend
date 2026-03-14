@@ -1,4 +1,6 @@
-export const verifyHTML = (token: string, name: string) => `<!DOCTYPE html>
+import siteConfig from "../../config/site.js";
+
+export const verifyHTML = (token: string, name: string, expiry: number) => `<!DOCTYPE html>
   <html>
   <head>
     <meta charset="UTF-8" />
@@ -41,7 +43,7 @@ export const verifyHTML = (token: string, name: string) => `<!DOCTYPE html>
                 </p>
 
                 <p style="font-size:14px; color:#666; margin-top:30px;">
-                  This link will expire in 6 minutes for security reasons.
+                  This link will expire in ${Math.floor(expiry / 60)} minutes for security reasons.
                 </p>
               </td>
             </tr>
@@ -49,7 +51,7 @@ export const verifyHTML = (token: string, name: string) => `<!DOCTYPE html>
             <!-- Footer -->
             <tr>
               <td style="background:#f9fafb; padding:20px; text-align:center; font-size:12px; color:#999;">
-                © ${new Date().getFullYear()} Your Company. All rights reserved.
+                © ${new Date().getFullYear()} ${siteConfig.name}. All rights reserved.
               </td>
             </tr>
 

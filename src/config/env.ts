@@ -22,7 +22,12 @@ const env = {
   REDIS_PASSWORD: requiredEnv("REDIS_PASSWORD"),
   REDIS_HOST: requiredEnv("REDIS_HOST"),
   REDIS_PORT: Number(requiredEnv("REDIS_PORT")),
-  SESSION_SECRET : requiredEnv("SESSION_SECRET")
+  SESSION_SECRET : requiredEnv("SESSION_SECRET"),
+  GOOGLE_CLIENT_ID : requiredEnv("GOOGLE_CLIENT_ID"),
+  GOOGLE_CLIENT_SECRET : requiredEnv("GOOGLE_CLIENT_SECRET"),
+  GITHUB_CLIENT_ID : requiredEnv("GITHUB_CLIENT_ID"),
+  GITHUB_CLIENT_SECRET : requiredEnv("GITHUB_CLIENT_SECRET"),
+  BACKEND_URL : requiredEnv("BACKEND_URL")
 };
 
 export default env;

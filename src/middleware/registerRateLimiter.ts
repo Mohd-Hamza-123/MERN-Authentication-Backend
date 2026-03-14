@@ -12,16 +12,14 @@ const registerRateLimiter = async (request: Request, response: Response, next: N
         const email = request.body.email
 
         const key = `register-rate-limit:${ip}:${email}`
-        console.log("Ip ", ip)
+        // console.log("Ip ", ip)
         const count = await redisClient.incr(key)
 
-        if (count === 1) {
-            await redisClient.expire(key, EXPIRY_TIME)
-        }
+        if (count === 1) await redisClient.expire(key, EXPIRY_TIME)
 
         if (count > MAX_REQUESTS) {
 
-            const remainingTime = Math.max(await redisClient.ttl(key),0)
+            const remainingTime = Math.max(await redisClient.ttl(key), 0)
 
             return response.status(429).json({
                 success: false,
@@ -32,7 +30,7 @@ const registerRateLimiter = async (request: Request, response: Response, next: N
         next()
 
     } catch (error) {
-        console.log("Registration Rate Limiter Error : ", error)
+        console.log("Registration Rate Limiter Error : ", error);
         next() //  If rate limiting fails → allow the request this is called fail-open.
     }
 

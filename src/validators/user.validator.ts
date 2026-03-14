@@ -25,10 +25,20 @@ export const password = z
 export const UserSchema = z.object({
     username,
     email,
-    password
-});
+    password,
+})
+
+const identifier = z
+    .string()
+    .min(3, "Email or username is required")
+    .refine((value) => {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const usernameRegex = /^[a-z0-9_-]+$/;
+        return emailRegex.test(value) || usernameRegex.test(value)
+    }, "Enter a valid email or username")
+
 export const signInSchema = z.object({
-    email,
+    identifier,
     password
 })
 export type UserType = z.infer<typeof UserSchema>

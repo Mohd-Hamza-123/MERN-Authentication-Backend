@@ -1,5 +1,6 @@
 import crypto from "crypto"
 import bcrypt from "bcrypt"
+import env from "../config/env.js";
 import User from "../models/user.model.js";
 import type { Request, Response } from "express";
 import { redisClient } from "../config/redis.js";
@@ -14,13 +15,12 @@ export const registerUser = asyncHandler(async (req: Request, res: Response) => 
 
     const { username, email, password } = req.body
 
+    // validation credentials
     const validation = UserSchema.safeParse({ username, email, password });
 
     if (!validation.success) {
 
         const errors = validation.error.issues.map((issue) => ({ field: issue.path[0], message: issue.message }))
-
-        // console.log(errors)
 
         return res.status(400).json({
             success: false,
@@ -30,14 +30,12 @@ export const registerUser = asyncHandler(async (req: Request, res: Response) => 
     }
 
     const userAlreadyExist = await User.findOne({
-        $or: [{ email }, { username }]
+        $or: [{ email: validation.data.email }, { username: validation.data.username }]
     })
 
     if (userAlreadyExist) {
         return res.status(400).json({ success: false, message: "user with provided email or username already exists" })
     }
-
-    // console.log(userAlreadyExist)
 
     const saltRounds = 11
     const hashedPassword = await bcrypt.hash(validation.data.password, saltRounds)
@@ -48,35 +46,34 @@ export const registerUser = asyncHandler(async (req: Request, res: Response) => 
         password: hashedPassword
     })
 
-    if (!user) return res.status(400).json({
-        success: false,
-        message: "registration failed"
-    })
-
     const token = crypto.randomBytes(32).toString("hex");
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex")
+    const EXPIRY = 60 * 15 // 15 minutes
+
+    const verifyKey = `verify:${hashedToken}`
+    await redisClient.set(verifyKey, user._id.toString(), { EX: EXPIRY })
 
     const mail = await sendEmail({
         to: user.email,
         subject: "Verify your email",
         text: "Please verify your email by clicking the link below",
-        html: verifyHTML(token, username)
+        html: verifyHTML(token, validation.data.username, EXPIRY)
     })
 
-    const verifyKey = `verify:${token}`
-    await redisClient.set(verifyKey, user._id.toString(), { EX: 360 }) // 6 minutes
+    if (!mail.success) await redisClient.del(verifyKey)
 
     return res.status(201).json({
-        isEmailSend: mail.success,
         success: true,
-        message: "Registration successfully done"
+        message: "Registration successful. Please verify your email.",
+        isMailSent: mail.success
     })
 
 })
 export const signInUser = asyncHandler(async (req: Request, res: Response) => {
 
-    const { email, password } = req.body
+    const { identifier, password, } = req.body
 
-    const validation = signInSchema.safeParse({ email, password })
+    const validation = signInSchema.safeParse({ identifier, password })
 
     if (!validation.success) {
         const errors = validation.error.issues.map((issue) => ({ message: issue.message, field: issue.path[0] }))
@@ -87,7 +84,14 @@ export const signInUser = asyncHandler(async (req: Request, res: Response) => {
         })
     }
 
-    const user = await User.findOne({ email }).select("+password")
+    const user = await User.findOne({
+        $or: [
+            { email: identifier },
+            { username: identifier }
+        ]
+    }).select("+password")
+
+    // console.log(user)
 
     if (!user) {
         return res.status(400).json({
@@ -96,11 +100,10 @@ export const signInUser = asyncHandler(async (req: Request, res: Response) => {
         })
     }
 
-    // console.log(password,user.password)
-    const passwordMatch = await bcrypt.compare(password, user.password)
-
+    const passwordMatch = await bcrypt.compare(password, user.password!)
+    // console.log(passwordMatch)
     if (!passwordMatch) {
-        return res.status(400).json({
+        return res.status(401).json({
             success: false,
             message: "Invalid Credentials"
         })
@@ -111,7 +114,7 @@ export const signInUser = asyncHandler(async (req: Request, res: Response) => {
 
     return res.status(200).json({
         success: true,
-        message: "login successfully"
+        message: "Login successful"
     })
 })
 export const verifyUser = asyncHandler(async (req: Request, res: Response) => {
@@ -178,16 +181,23 @@ export const forgotPassword = asyncHandler(async (req: Request, res: Response) =
     }
 
     const token = crypto.randomBytes(32).toString("hex")
-    const link = `http://localhost/reset-password/?token=${token}`
+    const link = `${env.CORS_ORIGIN}/reset-password/?token=${token}`
+    const TOKEN_EXPIRY = 60 * 5
+    const redis = await redisClient.set(`reset-${token}`, user._id.toString(), { EX: TOKEN_EXPIRY });
 
-    const redis = await redisClient.set(`reset-${token}`, user._id.toString(), { EX: 60 * 5 });
-
-    await sendEmail({
+    const mail = await sendEmail({
         to: validation.data,
         subject: "Forgot Password",
         text: "Reset password clicking the link below",
-        html: forgotPasswordTemplate(link)
+        html: forgotPasswordTemplate(link, TOKEN_EXPIRY)
     })
+
+    if (!mail.success) {
+        return res.status(400).json({
+            success: false,
+            message: "message: Unable to send the password reset email. Please try again later."
+        })
+    }
 
     return res.status(200).json({ success: true, message: "email sent" })
 
@@ -220,10 +230,6 @@ export const resetPassword = asyncHandler(async (req: Request, res: Response) =>
             message: "Verification link expired or already used"
         })
     }
-
-    console.log(token)
-    console.log(userId);
-    console.log(password);
 
     const hashedPassword = await bcrypt.hash(password, 10)
 
@@ -274,7 +280,9 @@ export const logout = asyncHandler(async (req: Request, res: Response) => {
 });
 export const myProfile = asyncHandler(async (req: Request, res: Response) => {
 
-    const userId = req.session.userId
+    const userId = req.session.userId || req?.user
+
+    if (!userId) return res.status(400).json({ success: false, message: "session expired" })
 
     const user = await User.findById(userId)
 
@@ -289,5 +297,54 @@ export const myProfile = asyncHandler(async (req: Request, res: Response) => {
         success: true,
         data: user
     })
+
+})
+export const emailVerification = asyncHandler(async (req: Request, res: Response) => {
+
+    const { email } = req.body
+    const validation = emailSchema.safeParse(email);
+
+    if (!validation.success) {
+        const message = validation.error.issues[0]?.message
+        return res.status(400).json({
+            success: false,
+            message: message || "invalid email"
+        })
+    }
+
+    const user = await User.findOne({ email })
+
+    if (!user) {
+        return res.status(400).json({
+            success: false,
+            message: "user not exist"
+        })
+    }
+
+    const token = crypto.randomBytes(32).toString("hex")
+    const hashedToken = crypto.createHash("sha256").update(token).digest("hex")
+    const TOKEN_EXPIRY = 60 * 15 // 15 minutes 
+
+    const verifyKey = `verify:${hashedToken}`
+    await redisClient.set(verifyKey, user._id.toString(), { EX: TOKEN_EXPIRY })
+
+    const mail = await sendEmail({
+        to: user.email,
+        subject: "Verify your email",
+        text: "Please verify your email by clicking the link below",
+        html: verifyHTML(token, user.username, TOKEN_EXPIRY)
+    })
+
+    if (!mail.success) {
+        return res.status(400).json({
+            success: false,
+            message: "email not sent"
+        })
+    }
+
+    return res.status(200).json({ success: true, message: "email sent" })
+
+})
+export const newLoginDetect = asyncHandler(async (req: Request, res: Response) => {
 
 })

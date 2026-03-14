@@ -1,4 +1,4 @@
-import { request, type NextFunction, type Request, type Response } from "express"
+import { type NextFunction, type Request, type RequestHandler, type Response } from "express"
 
 export const catchError = (err: Error, req: Request, res: Response, next: NextFunction) => {
   console.log(err.name)
@@ -9,14 +9,15 @@ export const catchError = (err: Error, req: Request, res: Response, next: NextFu
   })
 }
 
-export const asyncHandler = (handler: (req: Request, res: Response) => Promise<any>) => {
-  return async(req: Request, res: Response) => {
+export const asyncHandler = (handler: RequestHandler) => {
+  return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      await handler(req, res)
+      await handler(req, res, next)
     } catch (error) {
+      console.log(error instanceof Error ? error.message : error)
       res.status(500).json({
         success: false,
-        error: error instanceof Error ? error.message : "Internal Server Error"
+        message: "Internal Server Error"
       })
     }
   }

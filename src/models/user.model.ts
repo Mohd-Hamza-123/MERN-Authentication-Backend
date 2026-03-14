@@ -1,6 +1,15 @@
 import mongoose from "mongoose";
 
 const userSchema = new mongoose.Schema({
+    googleId: {
+        type: String,
+    },
+    githubId: {
+        type: String,
+    },
+    avatar: {
+        type: String,
+    },
     username: {
         type: String,
         required: [true, "username is required"],
@@ -14,7 +23,6 @@ const userSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        required: [true, "password is required"],
         select: false,
     },
     role: {
@@ -29,7 +37,6 @@ const userSchema = new mongoose.Schema({
 }, {
     timestamps: true
 })
-
 
 const User = mongoose.model("User", userSchema)
 
